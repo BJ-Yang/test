@@ -1,166 +1,58 @@
 <!DOCTYPE html>
 <html lang="zh-TW">
 <head>
-    <meta charset="UTF-8">
+    <title>ESP32 控制面板</title>
+    <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ESP32 雲端控制面板</title>
     <style>
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            height: 100vh;
-            margin: 0;
-            background-color: #f4f7f6;
-        }
-
-        .card {
-            background: white;
-            padding: 2rem;
-            border-radius: 20px;
-            box-shadow: 0 10px 25px rgba(0,0,0,0.1);
-            text-align: center;
-            width: 80%;
-            max-width: 400px;
-        }
-
-        h2 { color: #333; margin-bottom: 1.5rem; }
-
-        /* 狀態顯示區 */
-        .status-box {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 15px;
-            margin-bottom: 2rem;
-            padding: 15px;
-            border-radius: 15px;
-            background: #fafafa;
-        }
-
-        /* 圓形燈號視覺 */
-        #led-indicator {
-            width: 25px;
-            height: 25px;
-            border-radius: 50%;
-            background-color: #bbb;
-            transition: all 0.3s ease;
-        }
-
-        /* 燈號顏色狀態 */
-        .led-on {
-            background-color: #2ecc71 !important;
-            box-shadow: 0 0 15px #2ecc71;
-        }
-        .led-off {
-            background-color: #e74c3c !important;
-            box-shadow: 0 0 15px #e74c3c;
-        }
-
-        #led-text { font-weight: bold; font-size: 1.2rem; }
-
-        /* 按鈕樣式 */
-        .btn-group { display: flex; flex-direction: column; gap: 15px; }
-        
-        button {
-            padding: 15px 25px;
-            font-size: 1rem;
-            border: none;
-            border-radius: 10px;
-            cursor: pointer;
-            transition: transform 0.1s;
-            color: white;
-            font-weight: bold;
-        }
-
+        body { font-family: sans-serif; text-align: center; padding-top: 50px; background-color: #f4f4f9; }
+        h1 { color: #333; }
+        button { font-size: 24px; padding: 15px 40px; margin: 10px; cursor: pointer; border-radius: 8px; border: none; transition: 0.3s; }
         button:active { transform: scale(0.95); }
-
-        .btn-on { background-color: #2ecc71; }
-        .btn-off { background-color: #e74c3c; }
-
-        .footer { margin-top: 20px; font-size: 0.8rem; color: #888; }
+        .on { background-color: #4CAF50; color: white; box-shadow: 0 4px #2e7d32; }
+        .off { background-color: #f44336; color: white; box-shadow: 0 4px #c62828; }
+        #statusText { margin-top: 20px; color: #666; }
     </style>
 </head>
 <body>
+    <h1>ESP32-C3 燈光控制</h1>
+    
+    <button class="on" onclick="sendControl(true)">點亮 LED</button>
+    <button class="off" onclick="sendControl(false)">熄滅 LED</button>
 
-    <div class="card">
-        <h2>遠端控燈系統</h2>
-
-        <div class="status-box">
-            <div id="led-indicator"></div>
-            <span id="led-text">讀取中...</span>
-        </div>
-
-        <div class="btn-group">
-            <button class="btn-on" onclick="sendControl(true)">點亮 LED (ON)</button>
-            <button class="btn-off" onclick="sendControl(false)">關閉 LED (OFF)</button>
-        </div>
-
-        <div class="footer">
-            最後更新: <span id="time-text">-</span>
-        </div>
-    </div>
+    <p id="statusText">等待操作...</p>
 
     <script>
-        // 請務必更新這行 Ngrok 網址
+        // 1. 確保 IP 正確，且路徑結尾是 /rules/1
         // const API_URL = "http://192.168.41.135:3000/rules/1";
         const API_URL = "https://resale-essence-mustiness.ngrok-free.dev/rules/1";
 
-        // 更新網頁視覺狀態
-        function updateUI(status, time) {
-            const textEl = document.getElementById('led-text');
-            const indicatorEl = document.getElementById('led-indicator');
-            const timeEl = document.getElementById('time-text');
-
-            if (status) {
-                textEl.innerText = "燈號：亮起";
-                textEl.style.color = "#2ecc71";
-                indicatorEl.className = "led-on";
-            } else {
-                textEl.innerText = "燈號：熄滅";
-                textEl.style.color = "#e74c3c";
-                indicatorEl.className = "led-off";
-            }
-            if (time) timeEl.innerText = time;
-        }
-
-        // 發送指令給中繼站 (PATCH)
         function sendControl(status) {
-            const now = new Date().toLocaleString();
-            
+            const statusLabel = status ? "開啟" : "關閉";
+            const now = new Date().toLocaleString(); // 取得當前時間
+
             fetch(API_URL, {
                 method: 'PATCH',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ 
+                // 2. 傳送 ledStatus 並順便更新最後修改時間
+                body: JSON.stringify({ //JSON.stringify 會把 JavaScript 的物件轉成「純文字字串」
                     ledStatus: status,
                     lastUpdate: now
                 })
             })
             .then(res => {
-                if (res.ok) {
-                    console.log("伺服器已更新狀態為:", status);
-                    updateUI(status, now);
-                } else {
-                    alert("發送失敗，請檢查 Ngrok 是否開啟");
-                }
+                if (!res.ok) throw new Error("伺服器回應錯誤");
+                return res.json();
+            })
+            .then(data => {
+                console.log("設定成功:", data);
+                document.getElementById('statusText').innerText = "最後指令：" + statusLabel + " (" + now + ")";
             })
             .catch(err => {
-                console.error("錯誤:", err);
-                alert("連線錯誤，請確認網址是否正確");
+                console.error(err);
+                alert("連線失敗！請檢查筆電 JSON Server 是否啟動，且手機/電腦是否在同一個 Wi-Fi");
             });
         }
-
-        // 初始載入：從資料庫讀取目前狀態
-        window.onload = () => {
-            fetch(API_URL)
-            .then(res => res.json())
-            .then(data => {
-                updateUI(data.ledStatus, data.lastUpdate);
-            })
-            .catch(err => console.error("無法取得初始狀態:", err));
-        };
     </script>
 </body>
 </html>
